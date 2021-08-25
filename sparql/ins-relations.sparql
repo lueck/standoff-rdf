@@ -1,0 +1,10 @@
+PREFIX som: <http://github.com/lueck/standoff-mode/owl#>
+
+INSERT
+    { ?subject ?predicate ?object }
+WHERE {
+    ?rel a som:relation .
+    ?rel som:predicate ?predicate .
+    ?rel som:subject ?subject .
+    ?rel som:object ?object .
+}
