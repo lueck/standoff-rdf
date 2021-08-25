@@ -124,7 +124,10 @@ This will
   them in a folder for these ranges
 - make plain text from these extracted ranges, i.e. delete XML tags
   and resolve XML character references and do some additional
-  processing defined in `LOCAL2PLAIN`
+  processing defined in `LOCAL2PLAIN`. See e.g.
+  [dta2txt.sed](samples/dta2txt.sed) for post-processing ranges from
+  TEI source files provided by [Deutsches
+  Textarchiv](https://www.deutschestextarchiv.de).
 - make an RDF triple from every plain text file
 - concatenate these triples into `ranges.ttl` in the database folder
 
