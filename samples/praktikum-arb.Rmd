@@ -1,0 +1,662 @@
+---
+title: Auswertung
+output:
+  html_document:
+    toc: true
+params:
+  endpoint: 
+    label: Endpunkt
+    value: http://localhost:3030/arb
+  words.vischer.1:
+    label: Wortfeld für Vischer, Bd.1
+    value: wortliste.vischer1.txt
+  words.vischer.2.1:
+    label: Wortfeld für Vischer, Bd.2.1
+    value: wortliste.vischer2.1.txt
+---
+
+```{r message=FALSE}
+library(SPARQL)
+library(dplyr)
+library(tibble)
+library(magrittr)
+library(purrr)
+library(tidyr)
+library(knitr)
+library(ggplot2)
+```
+
+```{r eval=FALSE, echo=FALSE}
+# For interactive evaluation only!
+params <- list(endpoint = "http://localhost:3030/arb",
+               words.vischer.1 = "wortliste.vischer1.txt",
+               words.vischer.2.1 = "wortliste.vischer2.1.txt"
+               )
+```
+
+
+# Wer hat wo annotiert? #
+
+## Daten auslesen ##
+
+```{r}
+prefixes <- "PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX ns0: <http://github.com/lueck/standoff-mode/owl#>
+PREFIX ns1: <http://arb.fernuni-hagen.de/owl/beispiel#>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+PREFIX dsm: <http://www.dspin.de/data/metadata>
+PREFIX : <http://github.com/lueck/standoff-mode/rml/>
+PREFIX ql: <http://semweb.mmlab.be/ns/ql#>
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rml: <http://semweb.mmlab.be/ns/rml#>
+PREFIX rr: <http://www.w3.org/ns/r2rml#>
+PREFIX som: <http://github.com/lueck/standoff-mode/owl#>
+PREFIX arb: <http://arb.fernuni-hagen.de/owl/beispiel#>
+PREFIX tcf: <http://www.dspin.de/data/textcorpus>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX text: <http://jena.apache.org/text#>
+"
+```
+
+Auslesen der Metadaten:
+
+```{r}
+file_q <- paste(prefixes,
+                "SELECT ?file ?checksum ?author ?date ?source ?title
+WHERE {
+# ?file a som:teiDocument .
+?file som:md5sum ?checksum .
+?file dc:creator ?author .
+?file dc:date ?date .
+?file dc:source ?source .
+?file dc:title ?title .
+}")
+files <- SPARQL(params$endpoint, file_q, extra=NULL)$results %>%
+                                                   as_tibble() %>%
+                                                   group_by(file, checksum, date, source) %>%
+                                                   summarize(n = n()) %>%
+                                                   select(!n)
+```
+
+Auslesen der annotierten Passagen:
+
+```{r}
+range_q <- paste(prefixes,
+                 "SELECT ?range ?element ?start ?end ?tag ?file ?annotator
+WHERE {
+?range a som:markupRange .
+?range som:markupElementId ?element .
+?range som:sourceDocument ?file .
+?range som:sourceStart ?start .
+?range som:sourceEnd ?end .
+?range som:tag ?tag .
+?range som:annotator ?annotator .
+}")
+ranges <- SPARQL(params$endpoint, range_q, extra=NULL)$results %>% as_tibble()
+```
+
+Verbund der Daten erzeugen:
+
+```{r}
+ranges %<>%
+    left_join(files)
+```
+
+## Vischer, Bd. 1 ##
+
+```{r}
+vischer1 <- ranges %>%
+    filter(date == 1846) ## nur Vischer, Bd.1
+```
+
+```{r}
+vischer1 %>%
+    group_by(annotator) %>%
+    mutate(label = cur_group_id()) %>%
+    ggplot(aes(x=start, y=label, color=annotator)) +
+    geom_point()
+```
+
+### Auswertbare Kombinationen von Annotationen ###
+
+[Namen anonymisiert]
+
+1. Ermitteln des Ende des ersten Annotationsabschnittes, den nur MK
+und AJ annotiert haben, deren Annotationen wir aber nur nutzen
+wollen, wo keine anderen vorliegen.
+
+```{r}
+vischer1.abschnitt2.anfang <- vischer1 %>%
+    filter(annotator != "MK") %>%
+    filter(annotator != "AJ") %>%
+    filter(annotator != "AB") %>% # eine Annotation am Anfang
+    pull(start) %>%
+    min()
+```
+
+```{r}
+vischer1.abschnitt3.anfang <- vischer1 %>%
+    filter(annotator == "RB") %>%
+    pull(start) %>%
+    min()
+```
+
+2. Erstellen von Kombinationen:
+
+#### Kombination 1 ####
+
+```{r}
+filter.vischer1.komb1 <- function (.data)
+{
+    .data %>%
+        filter(date == 1846) %>% ## nur Vischer, Bd.1
+        filter(!(annotator == "AJ" & start > vischer1.abschnitt2.anfang)) %>%
+        filter(annotator %in% c("AJ", "PHz", "SH", "PH", "GB", "MH"))
+}
+```
+
+```{r}
+vischer1.komb1 <- vischer1 %>%
+    filter.vischer1.komb1()
+```
+
+```{r fig.cap="Vischer, Bd.1, Kombination 1"}
+vischer1.komb1 %>%
+    group_by(annotator) %>%
+    mutate(label = cur_group_id()) %>%
+    ggplot(aes(x=start, y=label, color=annotator)) +
+    geom_point()
+```
+
+#### Kombination 2 ####
+
+```{r}
+filter.vischer1.komb2 <- function (.data)
+{
+    .data %>%
+        filter(date == 1846) %>% ## nur Vischer, Bd.1
+        filter(!(annotator == "AJ" & start > vischer1.abschnitt3.anfang)) %>%
+        filter(annotator %in% c("AJ", "RB", "AB", "NK", "GB", "MH"))
+}
+```
+
+```{r}
+vischer1.komb2 <- vischer1 %>%
+    filter.vischer1.komb1()
+```
+
+```{r fig.cap="Vischer, Bd.1, Kombination 2"}
+vischer1.komb2 %>%
+    group_by(annotator) %>%
+    mutate(label = cur_group_id()) %>%
+    ggplot(aes(x=start, y=label, color=annotator)) +
+    geom_point()
+```
+
+
+## Vischer, Bd. 2.1 ##
+
+```{r}
+filter.vischer2.1 <- function (.data)
+{
+    .data %>%
+        filter(date == 1847) ## nur Vischer, Bd. 2.1
+}
+```
+
+```{r}
+vischer2.1 <- ranges %>%
+    filter.vischer2.1()
+```
+
+```{r}
+vischer2.1 %>%
+    group_by(annotator) %>%
+    mutate(label = cur_group_id()) %>%
+    ggplot(aes(x=start, y=label, color=annotator)) +
+    geom_point()
+```
+
+
+## Rosenkranz ##
+
+```{r}
+rosenkranz <- ranges %>%
+    filter(date == 1853) ## nur Rosenkranz
+```
+
+```{r}
+rosenkranz %>%
+    group_by(annotator) %>%
+    mutate(label = cur_group_id()) %>%
+    ggplot(aes(x=start, y=label, color=annotator)) +
+    geom_point()
+```
+
+### Auswertbare Kombinationen von Annotationen ###
+
+```{r}
+JM.ende <- ranges %>%
+    filter(annotator == "JM") %>%
+    pull(start) %>%
+    max()
+```
+
+```{r}
+UFO1.ende <- ranges %>%
+    filter(annotator == "UFO 1") %>%
+    pull(start) %>%
+    max()
+```
+
+```{r}
+ML.ende <- ranges %>%
+    filter(annotator == "ML") %>%
+    filter(start < 1000000) %>%       ## einzelne Annotationen weit hinten
+    pull(start) %>%
+    max()
+```
+
+#### Kombination 1 ####
+
+```{r}
+filter.rosenkranz.komb1 <- function (.data)
+{
+    .data %>%
+    filter(date == 1853) %>% ## nur Rosenkranz
+    filter(!(annotator == "CG" & start < JM.ende)) %>%
+    filter(!(annotator == "UFO 2" & start < ML.ende)) %>%
+    filter(annotator %in% c("ML", "UFO 2", "JM", "CG"))
+}
+```
+
+
+```{r}
+rosenkranz.komb1 <- ranges %>%
+    filter.rosenkranz.komb1()
+```
+
+```{r}
+rosenkranz.komb1 %>%
+    group_by(annotator) %>%
+    mutate(label = cur_group_id()) %>%
+    ggplot(aes(x=start, y=label, color=annotator)) +
+    geom_point()
+```
+
+
+
+# Anzahl der Beispiele 1 #
+
+Folgende Aufstellungen berücksichtigen alle Beispiele, Personen und
+Werke, egal ob sie per Grundprädikat `beispielFuer` mit einem Konzept
+oder Kontext verbunden sind. Insbesondere bei Personen und Werken kann
+es dadurch zu höheren Zahlen kommen.
+
+In den folgenden Tabellen sind in der Spalte `ranges` die Anzahl
+der annotierten Ranges aufgeführt, in der Spalte `elements` die Anzahl
+der Elemente, die wegen diskontinuierlichem Markup geringer ausfallen
+kann: Ein Element kann aus mehreren Ranges bestehen.
+
+
+
+```{r}
+tag_count <- function (.data)
+{
+    group_by(.data, tag) %>%
+    summarize(ranges = n(),
+              elements = n_distinct(element)) %>%
+    kable()
+}
+```
+
+
+
+## Vischer Bd. 1 ##
+
+Kombination 1:
+
+```{r}
+vischer1.komb1 %>%
+    tag_count()
+```
+
+Kombination 2:
+
+```{r}
+vischer1.komb2 %>%
+    tag_count()
+```
+
+## Vischer, Bd 2.1 ##
+
+```{r}
+vischer2.1 %>%
+    tag_count()
+```
+
+## Rosenkranz ##
+
+```{r}
+rosenkranz.komb1 %>%
+    group_by(tag) %>%
+    summarize(n = n(),
+              distinct = n_distinct(element)) %>%
+    kable()
+```
+
+
+
+# Wo befinden sich die Beispiele? #
+
+Wir haben momentan keine Daten über die Position (character offset)
+der Kapitel- oder Absatzanfänge. Deswegen benutzen wir einfach
+Intervalle fester Länge, um die Beispiele darin zu zählen.
+
+```{r}
+interval.laenge <- 50000
+teilung <- seq(from = 0, to = 2000000, by = interval.laenge)
+labels <- map_int(teilung, ~ as.integer(.x %% (interval.laenge * 10) == 0) * as.integer(.x)) %>%
+    map_chr(~ if(.x == 0) "" else as.character(.x))
+```
+
+Von folgenden Tags werden die Annotationen addiert:
+
+```{r}
+beispiel.tags <-
+    c("<http://arb.fernuni-hagen.de/owl/beispiel#Beispiel>",
+      "<http://arb.fernuni-hagen.de/owl/beispiel#Werk>",
+      "<http://arb.fernuni-hagen.de/owl/beispiel#Person>")
+```
+
+
+Funktion zum Zählen und Visualisieren der Beispiele in den Intervallen:
+
+```{r}
+plot_positions <- function (.data, .teilung = teilung, .labels = labels)
+{
+    p <- mutate(.data, bins = cut(start, breaks = .teilung)) %>%
+        group_by(tag, bins) %>%
+        summarize(n = n_distinct(element)) %>%
+        ggplot(aes(x = bins, y = n, fill = tag))
+    p + scale_x_discrete(name=paste("Position (Intervallänge", as.character(interval.laenge), "Zeichen)"),
+                         labels = .labels
+                         ) +
+        geom_bar(stat="identity")
+}
+```
+
+
+## Vischer, Bd. 1 ##
+
+
+```{r eval=FALSE, echo=FALSE}
+vischer1.komb1 %>%
+    filter(tag %in% beispiel.tags) %>%
+    mutate(bins = cut(start, breaks = teilung)) %>%
+    group_by(tag, bins, .drop=FALSE) %>%
+    summarize(n = n_distinct(element), .groups = "keep") %>%
+    replace_na(list(n=0)) %>%
+    kable()
+```
+
+```{r}
+vischer1.komb1 %>%
+    filter(tag %in% beispiel.tags) %>%
+    plot_positions()
+```
+
+```{r, fig.cap="Vischer, Bd.1, Kombination 2, Anzahl der Beispiele in jedem Interval"}
+vischer1.komb2 %>%
+    filter(tag %in% beispiel.tags) %>%
+    plot_positions()
+```
+
+## Vischer Bd. 2.1 ##
+
+```{r, fig.cap="Vischer, Bd. 2.1, Anzahl der Beispiele in jedem Interval"}
+vischer2.1 %>%
+    filter(tag %in% beispiel.tags) %>%
+    plot_positions()
+```
+
+## Rosenkranz ##
+
+```{r, fig.cap="Rosenkranz, Kombination 1, Anzahl der Beispiele in jedem Interval"}
+rosenkranz.komb1 %>%
+    filter(tag %in% beispiel.tags) %>%
+    plot_positions()
+
+```
+
+
+# Anzahl und Ort der Beispiel 2 #
+
+## Datenabfrage ##
+
+Durch folgende Datenabfrage werden Personen und Werke, die nicht
+`beispielFuer` ein Konzept oder Kontext sind, nicht
+gezählt. Allerdings werden auch Beispiele, die nicht als
+`beispielFuer` mit irgendetwas relationiert sind, nicht gezählt. Der
+im SPARQL-Endpunkt eingesetzte OWL-Reasoner sichert, dass auch von
+`beispielFuer` abgeleitete Beispielrelationen gezählt werden.
+
+```{r}
+examples_q <- paste(prefixes,
+                        "SELECT (?subjectR AS ?range) (?subject as ?element) ?start ?end ?tag ?file ?annotator
+WHERE {
+    ?subject arb:beispielFuer ?object .
+    ?subjectR som:markupElementId ?subject .
+    ?subjectR som:annotator ?annotator .
+    ?subjectR som:tag ?tag .
+    ?subjectR som:sourceStart ?start .
+    ?subjectR som:sourceEnd ?end .
+    ?subjectR som:sourceDocument ?file .
+}")
+examples <- SPARQL(params$endpoint, examples_q, extra=NULL)$results %>% as_tibble()
+```
+
+Verbund der Daten erstellen:
+
+```{r}
+examples %<>%
+    left_join(files)
+```
+
+## Vischer, Bd. 1 ##
+
+Kombination 1:
+
+```{r}
+examples.vischer1.komb1 <- examples %>%
+    filter.vischer1.komb1()
+```
+
+```{r}
+examples.vischer1.komb1 %>%
+    plot_positions()
+```
+
+```{r}
+examples.vischer1.komb1 %>%
+    tag_count()
+```
+
+Kombination 2:
+
+```{r}
+examples.vischer1.komb2 <- examples %>%
+    filter.vischer1.komb2()
+```
+
+```{r}
+examples.vischer1.komb2 %>%
+    plot_positions()
+```
+
+```{r}
+examples.vischer1.komb2 %>%
+    tag_count()
+```
+
+## Vischer, Bd. 2.1 ##
+
+```{r}
+examples.vischer2.1 <- examples %>%
+    filter.vischer2.1()
+```
+
+```{r}
+examples.vischer2.1 %>%
+    plot_positions()
+```
+
+```{r}
+examples.vischer2.1 %>%
+    tag_count()
+```
+
+
+## Rosenkranz ##
+
+```{r}
+examples.rosenkranz.komb1 <- examples %>%
+    filter.rosenkranz.komb1()
+```
+
+```{r}
+examples.rosenkranz.komb1 %>%
+    plot_positions()
+```
+
+```{r}
+examples.rosenkranz.komb1 %>%
+    tag_count()
+```
+
+# Beispiele für das Hässliche #
+
+## Datenabfrage ##
+
+Lesen des Wortfeldes *das Hässliche*:
+
+```{r}
+ugly.words.vischer.1 <- paste(readLines(params$words.vischer.1),
+                             collapse=" ") %>%
+    strsplit(split=" ") %>%
+    sapply(function(.x) paste0(.x, "*")) %>%  ## add "*" to every word
+    paste(collapse=" ")                       ## collapse to single string
+```
+
+```{r}
+ugly.words.vischer.2.1 <- paste(readLines(params$words.vischer.2.1),
+                             collapse=" ") %>%
+    strsplit(split=" ") %>%
+    sapply(function(.x) paste0(.x, "*")) %>%  ## add "*" to every word
+    paste(collapse=" ")                       ## collapse to single string
+```
+
+```{r}
+ugly_q <- paste0(prefixes,
+               "\nSELECT (?subjectR AS ?range) (?subject AS ?element) ?start ?end ?tag ?file ?annotator
+  WHERE {
+    ?subject arb:beispielFuer ?object .
+    ?subjectR som:markupElementId ?subject .
+    ?subjectR som:annotator ?annotator .
+    ?subjectR som:tag ?tag .
+    ?subjectR som:sourceStart ?start .
+    ?subjectR som:sourceEnd ?end .
+    ?subjectR som:sourceDocument ?file .
+	?objectR som:markupElementId ?object .
+    ?objectR text:query ( som:text \"",
+	ugly.words.vischer.1,
+	" ",
+	ugly.words.vischer.2.1,
+	"\" ) .
+  }")
+```
+
+```{r}
+ugly <- SPARQL(params$endpoint, ugly_q, extra=NULL)$results %>% as_tibble()
+```
+
+Verbund der Daten erstellen:
+
+```{r}
+ugly %<>%
+    left_join(files)
+```
+
+## Vischer, Bd. 1 ##
+
+Kombination 1:
+
+```{r}
+ugly.vischer1.komb1 <- ugly %>%
+    filter.vischer1.komb1()
+```
+
+```{r}
+ugly.vischer1.komb1 %>%
+    plot_positions()
+```
+
+```{r}
+ugly.vischer1.komb1 %>%
+    tag_count()
+```
+
+Kombination 2:
+
+```{r}
+ugly.vischer1.komb2 <- ugly %>%
+    filter.vischer1.komb2()
+```
+
+```{r}
+ugly.vischer1.komb2 %>%
+    plot_positions()
+```
+
+```{r}
+ugly.vischer1.komb2 %>%
+    tag_count()
+```
+
+## Vischer, Bd. 2.1 ##
+
+```{r}
+ugly.vischer2.1 <- ugly %>%
+    filter.vischer2.1()
+```
+
+```{r}
+ugly.vischer2.1 %>%
+    plot_positions()
+```
+
+```{r}
+ugly.vischer2.1 %>%
+    tag_count()
+```
+
+
+## Rosenkranz ##
+
+```{r}
+ugly.rosenkranz.komb1 <- ugly %>%
+    filter.rosenkranz.komb1()
+```
+
+```{r}
+ugly.rosenkranz.komb1 %>%
+    plot_positions()
+```
+
+```{r}
+ugly.rosenkranz.komb1 %>%
+    tag_count()
+```
