@@ -1,0 +1,139 @@
+# Configuration for publishing annotation data with Apache Jena Fuseki
+# This config adds a Micro-OWL Reasoner and a Lucene full text index.
+#
+# You first need to load the data files into the Fuseki/TDB2 dataset:
+#
+# tdb2.tdbloader --tdb <THIS_FILE> triples/database/*
+#
+# Then, the index has to be generated:
+#
+# java -cp $FUSEKI_HOME/fuseki-server.jar jena.textindexer --desc=resources/<THIS_FILE>
+#
+# Then start the fuseki server:
+#
+# fuseki-server --config=<THIS_FILE>
+
+PREFIX :        <#>
+PREFIX fuseki:  <http://jena.apache.org/fuseki#>
+PREFIX rdf:     <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs:    <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX tdb2:    <http://jena.apache.org/2016/tdb#>
+PREFIX ja:      <http://jena.hpl.hp.com/2005/11/Assembler#>
+PREFIX text:    <http://jena.apache.org/text#>
+PREFIX som:     <http://github.com/lueck/standoff-mode/owl#>
+PREFIX dc:      <http://purl.org/dc/elements/1.1/>
+
+## ---------------------------------------------------------------
+## Updatable TDB dataset with all services enabled.
+
+<#service> rdf:type fuseki:Service ;
+    rdfs:label                         "TDB2 standoff" ;
+    fuseki:name                        "standoff" ;
+    fuseki:serviceQuery                "" ;
+    fuseki:serviceQuery                "sparql" ;
+    fuseki:serviceQuery                "query" ;
+    fuseki:serviceUpdate               "" ;
+    fuseki:serviceUpdate               "update" ;
+    fuseki:serviceUpload               "upload" ;
+    fuseki:serviceReadWriteGraphStore  "data" ;     
+    fuseki:serviceReadGraphStore       "get" ;
+    fuseki:dataset                     <#textDataset> ;
+    .
+
+<#inferenceDataset> rdf:type ja:RDFDataset ;
+    ja:defaultGraph <#inferenceModel> ;
+    .
+
+<#inferenceModel> rdf:type ja:InfModel ;
+    ja:reasoner [ ja:reasonerURL <http://jena.hpl.hp.com/2003/OWLMicroFBRuleReasoner> ] ;
+    ja:baseModel <#baseModel> ;
+    .
+
+<#textDataset> rdf:type text:TextDataset ;
+    text:dataset <#inferenceDataset> ;
+    text:index <#indexLucene> ;
+    .
+
+<#baseModel>    rdf:type      tdb2:GraphTDB2 ;
+    tdb2:location "tdb2" ;
+    ##ja:context [ ja:cxtName "arq:queryTimeout" ;  ja:cxtValue "3000" ] ;
+    ##tdb2:unionDefaultGraph true ;
+    .
+
+# Text index description
+<#indexLucene> a text:TextIndexLucene ;
+    text:directory <file:triples/tdb2/indices> ;
+    text:entityMap <#entMap> ;
+    text:storeValues true ; 
+    text:analyzer [ a text:StandardAnalyzer ;
+        # a text:ConfigurableAnalyzer ;
+        # text:tokenizer text:StandardTokenizer ;
+        # text:filters ( text:StandardFilter      ) ;
+        ] ;
+    ## text:queryAnalyzer [ a text:KeywordAnalyzer ] ;
+    text:queryParser text:AnalyzingQueryParser ;
+    text:propLists (
+        [ text:propListProp som:text ;
+            text:props ( som:text ) ;
+            ]
+        [ text:propListProp dc:title ;
+            text:props ( dc:title ) ;
+            ]
+        [ text:propListProp dc:creator ;
+            text:props ( dc:creator ) ;
+            ]
+        [ text:propListProp dc:source ;
+            text:props ( dc:source ) ;
+            ]
+        [ text:propListProp som:meta ;
+            text:props ( dc:title dc:creator dc:source ) ;
+            ]
+        ) ;
+    #text:defineAnalyzers ( [ . . . ] . . . ) ;
+    text:multilingualSupport true ; # optional
+    .
+
+# Entity map (see documentation for other options)
+<#entMap> a text:EntityMap ;
+    text:defaultField     "range" ;
+    text:entityField      "uri" ;
+    text:uidField         "uid" ;
+    text:langField        "lang" ;
+    text:graphField       "graph" ;
+    text:map (
+        [
+            text:field "range" ;
+            text:predicate som:text ;
+            text:analyzer [
+                a text:StandardAnalyzer ;
+                ]
+            ]
+        [
+            text:field "title" ;
+            text:predicate dc:title ;
+            text:analyzer [
+                a text:StandardAnalyzer ;
+                ]
+            ]
+        [
+            text:field "creator" ;
+            text:predicate dc:creator ;
+            text:analyzer [
+                a text:StandardAnalyzer ;
+                ]
+            ]
+        [
+            text:field "source" ;
+            text:predicate dc:source ;
+            text:analyzer [
+                a text:StandardAnalyzer ;
+                ]
+            ]
+        )
+    .
+
+## not used
+<#luceneAnalyzer> a text:ConfigurableAnalyzer ;
+    text:tokenizer text:StandardTokenizer ;
+    text:filters ( text:StandardFilter ) ;
+    .
