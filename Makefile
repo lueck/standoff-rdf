@@ -8,8 +8,9 @@ RANGES_DIR ?= $(BASE_DIR)/ranges # should contain nothing but ranges and derivat
 
 DATABASE ?= $(BASE_DIR)/data.ttl
 
-LOCAL2PLAIN ?= cat
+TEXT_LANGUAGE ?= $(shell ${LANG:0:2})
 
+LOCAL2PLAIN ?= cat
 
 SOURCE_SUFFIX ?= TEI-P5.xml
 SOURCE_DOCS ?= $(shell find $(SOURCE_DIR) -regextype sed -regex ".*\.$(SOURCE_SUFFIX)$$" -type f)
@@ -25,11 +26,15 @@ MD5_META := $(patsubst %,%.meta.ttl,$(MD5_DOCS))
 
 RANGES := $(shell find $(RANGES_DIR) -regextype sed -regex ".*/[a-fA-F0-9-]\{36\}" -type f)
 RANGES_TXT := $(patsubst %,%.txt,$(RANGES))
-RANGES_TCF := $(patsubst %,%.tcf,$(RANGES))
-RANGES_TTL := $(patsubst %,%.tcf.ttl,$(RANGES))
+RANGES_TTL := $(patsubst %,%.txt.ttl,$(RANGES))
 
+
+# using WebLicht for NLP is optional
 WEBLICHT_URL ?= https://weblicht.sfs.uni-tuebingen.de/WaaS/api/1.0/chain/process
 WEBLICHT_CHAIN ?= weblicht/de/chain42891928686544276.xml
+
+RANGES_TCF := $(patsubst %,%.tcf,$(RANGES))
+RANGES_TCF_TTL := $(patsubst %,%.tcf.ttl,$(RANGES))
 
 
 all: triples $(DATABASE)
@@ -67,6 +72,14 @@ markup_ranges_sh: $(MARKUP_RANGES_SH)
 .PHONY: txt
 txt: $(RANGES_TXT)
 
+
+%.txt.ttl: %.txt
+	./txt2ttl.sh -l $(TEXT_LANGUAGE) -o $@ $<
+
+.PHONY: txt_ttl
+txtttl: $(RANGES_TTL)
+
+
 %.tcf:	%.txt
 	weblicht/waas.sh -c $(WEBLICHT_CHAIN) $< > $@ 2> >(tee -a $@.log >&2)
 
@@ -77,8 +90,8 @@ tcf: $(RANGES_TCF)
 %.tcf.ttl: %.tcf
 	./tcf2rdf.sh $< > $@
 
-.PHONY: ranges_ttl
-tcfttl: $(RANGES_TTL)
+.PHONY: ranges_tcf_ttl
+tcfttl: $(RANGES_TCF_TTL)
 
 
 $(DATABASE).pre: $(MARKUP_RDF) $(MD5_META) $(RANGES_TTL)
