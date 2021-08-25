@@ -1,2 +1,6 @@
-## sample input
-annotations.*
+*~
+
+# folders of default setup
+src
+data
+tdb2
