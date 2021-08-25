@@ -113,8 +113,12 @@ $(DATABASE_DIR)/annotations.ttl: $(MARKUP_RDF)
 $(DATABASE_DIR)/ranges.ttl: $(RANGES_TTL)
 	riot --output=turtle $^ > $@
 
+
 $(DATABASE_DIR)/nlp.ttl: $(RANGES_TCF_TTL)
 	riot --output=turtle $^ > $@
+
+.PHONY: nlp
+nlp:	$(DATABASE_DIR)/nlp.ttl
 
 
 ## rules for setting up und running Fuseki server
