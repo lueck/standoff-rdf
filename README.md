@@ -158,10 +158,10 @@ Lucene index on the extracted markup ranges and meta data. You can set
 the config by setting `FUSEKI_CONF`. See [`fuseki`](fuseki) for
 different assembler files.
 
-## 4. Run preparing queries ##
+## Run preparing queries (optional) ##
 
 If you are using a tagger like `standoff-mode` with a RDFS/OWL
-annotation scheme, you might want to run the following query in otder
+annotation scheme, you might want to run the following query in order
 to add your relations as SPO-triples to the graph:
 
 ```{sparql}
@@ -180,7 +180,79 @@ WHERE {
 
 # Structure of generated RDF #
 
-TODO
+Let's explain the structure of the generated RDF graph by example!
+
+Here's an example from the generated `annotations.ttl`:
+
+```{ttl}
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix som: <http://github.com/lueck/standoff-mode/owl#> .
+
+<file://../src/6ef9537e9e5e70edbd3936f89a33a992>
+        rdf:type    som:sourceDocument ;
+        som:md5sum  "6ef9537e9e5e70edbd3936f89a33a992" .
+
+<http://github.com/lueck/standoff-mode/annotation/0063875a-b5d3-4878-8e2f-5508e2baa7ef>
+        rdf:type             som:markupRange ;
+        som:annotator        "RBach" ;
+        som:markupElementId  <http://github.com/lueck/standoff-mode/annotation/49a97f61-b8d8-4f27-b978-7c18caf16688> ;
+        som:sourceDocument   <file://../src/6ef9537e9e5e70edbd3936f89a33a992> ;
+        som:sourceEnd        557928 ;
+        som:sourceStart      557743 ;
+        som:tag              <http://arb.fernuni-hagen.de/owl/beispiel#Konzept> ;
+        som:uuid             "0063875a-b5d3-4878-8e2f-5508e2baa7ef" .
+
+<http://github.com/lueck/standoff-mode/annotation/000ca09c-c48a-4b51-b1e6-c29eddaf80cd>
+        rdf:type       som:relation ;
+        som:annotator  "RBach" ;
+        som:object     <http://github.com/lueck/standoff-mode/annotation/49a97f61-b8d8-4f27-b978-7c18caf16688> ;
+        som:predicate  <http://arb.fernuni-hagen.de/owl/beispiel#beispielFuer> ;
+        som:subject    <http://github.com/lueck/standoff-mode/annotation/5a683485-1c49-48fa-ae64-fff080df207c> ;
+        som:uuid       "000ca09c-c48a-4b51-b1e6-c29eddaf80cd" .
+```
+
+Note, that multiple `markupRange`s can share a common
+`som:markupElementId` property!  If they do, they belong to the same
+annotated entity and are parts of **discontinuous markup**.  Relations
+do not reference `markupRange`s, but **elements**!
+
+Here is an example how TEI header data are transformed to `meta.ttl`:
+
+```{ttl}
+@prefix dc: <http://purl.org/dc/elements/1.1/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix som: <http://github.com/lueck/standoff-mode/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<file://../src/6ef9537e9e5e70edbd3936f89a33a992>
+        rdf:type       som:teiDocument ;
+        som:md5sum     "6ef9537e9e5e70edbd3936f89a33a992" ;
+        dc:creator     "\n\nVischer\nFriedrich Theodor von\n\n" ;
+        dc:creator     "http://d-nb.info/gnd/11862721X" ;
+        dc:date        1846 ;
+        dc:identifier  "urn:nbn:de:kobv:b4-200905196548" ;
+        dc:source      "Vischer, Friedrich Theodor von: Ästhetik oder Wissenschaft des Schönen. Bd. 1. Reutlingen u. a., 1846." ;
+        dc:title       "Erster Theil: Die Metaphysik des Schönen" ;
+        dc:title       "Zum Gebrauche für Vorlesungen" ;
+        dc:title       "Ästhetik oder Wissenschaft des Schönen" .
+```
+
+Note, that the MD5 sum of the file is central to joining annotation
+data and meta data, since it goes into the
+`<file://../src/6ef9537e9e5e70edbd3936f89a33a992>` IRI.
+
+Here is an example Range from `ranges.ttl`:
+
+```{ttl}
+@prefix som: <http://github.com/lueck/standoff-mode/owl#> .
+
+<http://github.com/lueck/standoff-mode/annotation/0063875a-b5d3-4878-8e2f-5508e2baa7ef>
+        som:text  "der\nKünstler findet diesen so weit schon geformten Stoff in der Erfahrung\nvor und wählt ihn zur Umbildung in die reine Form"@de .
+```
+
+So, the annotation's UUIDs and the IRIs made from it are central to
+joining annotation data and the content of the source document.
+
 
 # Samples #
 
