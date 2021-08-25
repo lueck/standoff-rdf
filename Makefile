@@ -18,7 +18,8 @@ SOURCE_DOCS ?= $(shell find $(SOURCE_DIR) -regextype sed -regex ".*\.$(SOURCE_SU
 
 RMLMAPPER_JAR ?= ~/src/rmlmapper-java/target/rmlmapper-*-all.jar
 
-MARKUP := $(shell find $(MARKUP_DIR) -name "*.json" -type f)
+MARKUP_SUFFIX ?= json
+MARKUP := $(shell find $(MARKUP_DIR) -name "*.$(MARKUP_SUFFIX)" -type f)
 MARKUP_RDF := $(patsubst %,%.ttl,$(MARKUP))
 MARKUP_RANGES_SH := $(patsubst %.json.ttl,%.ranges.sh,$(MARKUP_RDF))
 
