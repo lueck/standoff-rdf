@@ -5,8 +5,9 @@ SOURCE_DIR ?= $(BASE_DIR)/src
 MARKUP_DIR ?= $(SOURCE_DIR)
 MD5_DIR ?= $(SOURCE_DIR)
 RANGES_DIR ?= $(BASE_DIR)/ranges # should contain nothing but ranges and derivates, see clean* rule!
+DATABASE_DIR ?= $(BASE_DIR)/data
+DATABASE_TDB2 ?= tdb2
 
-DATABASE ?= $(BASE_DIR)/data.ttl
 
 TEXT_LANGUAGE ?= $(shell ${LANG:0:2})
 
@@ -29,6 +30,10 @@ RANGES_TXT := $(patsubst %,%.txt,$(RANGES))
 RANGES_TTL := $(patsubst %,%.txt.ttl,$(RANGES))
 
 
+## Assembler file (configuration) for Apache Jena Fuseki server
+FUSEKI_CONF ?= resources/fuseki/fuseki-inf-text.ttl
+
+
 # using WebLicht for NLP is optional
 WEBLICHT_URL ?= https://weblicht.sfs.uni-tuebingen.de/WaaS/api/1.0/chain/process
 WEBLICHT_CHAIN ?= weblicht/de/chain42891928686544276.xml
@@ -37,7 +42,9 @@ RANGES_TCF := $(patsubst %,%.tcf,$(RANGES))
 RANGES_TCF_TTL := $(patsubst %,%.tcf.ttl,$(RANGES))
 
 
-all: triples $(DATABASE)
+.PHONY: all
+all: 	$(DATABASE_DIR)/meta.ttl $(DATABASE_DIR)/annotations.ttl $(DATABASE_DIR)/ranges.ttl
+
 
 
 .PHONY: md5src
@@ -94,21 +101,46 @@ tcf: $(RANGES_TCF)
 tcfttl: $(RANGES_TCF_TTL)
 
 
-$(DATABASE).pre: $(MARKUP_RDF) $(MD5_META) $(RANGES_TTL)
-	cat $^ | grep ^@ | sort -u > $@
+## rules for concatenating RDF files
 
-$(DATABASE).rest: $(MARKUP_RDF) $(MD5_META) $(RANGES_TTL)
-	cat $^ | grep ^[^@] > $@
+$(DATABASE_DIR)/meta.ttl: $(MD5_META)
+	riot --output=turtle $^ > $@
 
-$(DATABASE):	$(DATABASE).pre $(DATABASE).rest
-	cat $^ > $@
+$(DATABASE_DIR)/annotations.ttl: $(MARKUP_RDF)
+	riot --output=turtle $^ > $@
 
-.PHONY: triples
-triples: $(MARKUP_RDF) $(MD5_META) $(RANGES_TTL)
+$(DATABASE_DIR)/ranges.ttl: $(RANGES_TTL)
+	riot --output=turtle $^ > $@
+
+$(DATABASE_DIR)/nlp.ttl: $(RANGES_TCF_TTL)
+	riot --output=turtle $^ > $@
 
 
-.PHONY: clean*
-clean*:
+## rules for setting up und running Fuseki server
+
+tdb2:	all
+	tdb2.tdbloader --tdb $(FUSEKI_CONF) $(DATABASE_DIR)/*
+
+index:
+	java -cp $(FUSEKI_HOME)/fuseki-server.jar jena.textindexer --desc=$(FUSEKI_CONF)
+
+run:
+	$(FUSEKI_HOME)/fuseki-server --config=$(FUSEKI_CONF)
+
+.PHONY: tdb2 index run
+
+
+.PHONY: clean
+clean:
+	rm -Rf $(DATABASE_DIR)/meta.ttl
+	rm -Rf $(DATABASE_DIR)/annotations.ttl
+	rm -Rf $(DATABASE_DIR)/ranges.ttl
+	rm -Rf $(DATABASE_DIR)/nlp.ttl
+	rm -RF $(RANGES_TTL)
+
+
+.PHONY: cleanall
+cleanall:
 	rm -Rf $(MD5_META)
 	rm -Rf $(MD5_DOCS)
 	rm -Rf $(MARKUP_RDF)
